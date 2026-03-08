@@ -7,9 +7,7 @@
 #define MAX_CHARS 256
 #define MAX_BLOCKS 50
 
-// prototypes
-void read_database(char*, char*, char*, char*, BlockDB normal[MAX_BLOCKS], BlockDB*, int*);
-void format_input(char*);
+// criação da estrutura BlockDB que age como base de dados
 
 typedef struct {
     char keywords[MAX_LINES][MAX_CHARS];
@@ -21,70 +19,84 @@ typedef struct {
     int rr_counter;
 } BlockDB;
 
-typedef struct {
-    char answers[MAX_LINES][MAX_CHARS];
-    int nr_answers;
+// declarações das funções usadas no programa (PROTOTYPES)
 
-    int rr_counter;
-} NoKeyDB;
+void read_file(char* filename, char* greeting, char* repetition, char* farewell, BlockDB normal[MAX_BLOCKS], int* nr_blocos);
+void format_input(char* line);
+void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks);
 
 int main() {
-    char* greeting;
-    char* repetition;
-    char* farewell;
+    char greeting[MAX_CHARS];
+    char repetition[MAX_CHARS];
+    char farewell[MAX_CHARS];
     BlockDB normal[MAX_BLOCKS];
-    BlockDB* no_key;
-    int* nr_blocks;
+    int nr_blocks = 0;
 
-    read_database("eliza.dat", greeting, repetition, farewell, normal, no_key, nr_blocks);
-
-    // stdin
+    // chamar a função read_file, que regista a base de dados após ler o ficheiro
+    read_file("eliza.dat", greeting, repetition, farewell, normal, &nr_blocks);
 
     char former_line[MAX_CHARS];
+    // registo da ultima entrada, util pra chamar o repetition
     char line[MAX_CHARS];
 
-    printf("%s", greeting);
-    while (1) {
-        fgets(line, MAX_CHARS, stdin);
+    // antes de tudo, usar greeting para saudar o utilizador
+    printf("%s\n", greeting);
+
+    // ciclo que recebe como inputs stdin e os regista de cada vez como line, terminando implicitamente no EOF
+    while (fgets(line, sizeof(line), stdin)) {
+        // cortar a linha no enter
         line[strcspn(line, "\n")] = '\0';
 
+        // formatar a linha
         format_input(line);
 
-        if (strcmp("\n", line) == 0)
-            continue;
+        // ignorar se o user deu enter sem escrever nada
+        if (strlen(line) == 0) continue;
 
-        else if (strcmp("BYE", line) == 0) {
-            printf("%s", farewell);
+        // mostrar mensagem de despedida se o user digitar especificamente 'BYE'
+        if (strcmp("BYE", line) == 0) {
+            printf("%s\n", farewell);
             break;
-        } else if (strcmp(former_line, line) == 0) {
-            printf("%s", repetition);
-            continue;
-        } else {
-            pass;  // search database
         }
 
+        // comparar linha atual com linha imediatamente anterior: se forem iguais mostrar mensagem de repetição
+        if (strcmp(former_line, line) == 0) {
+            printf("%s\n", repetition);
+            continue;
+        }
+
+        // atualizar valor da ultima linha, para poder comparar a proxima linha com esta
         strcpy(former_line, line);
+
+        // invocar função search_database para dar print à resposta (Stdout)
+        search_database(line, normal, nr_blocks);
     }
 }
 
-void read_database(char* filename, char* greeting, char* repetition, char* farewell,
-                   BlockDB normal[MAX_BLOCKS], BlockDB* no_key, int* nr_blocos) {
-    FILE* fptr;
-    fptr = fopen(filename, "r");
+void read_file(char* filename, char* greeting, char* repetition,
+               char* farewell, BlockDB normal[MAX_BLOCKS], int* nr_blocks) {
+    // abrir o file pointer
+    FILE* fptr = fopen(filename, "r");
 
     if (fptr == NULL) {
         printf("Error, could not open file\n");
         return;
     }
 
+    // zerar a memória da base de dados
     memset(normal, 0, sizeof(BlockDB) * MAX_BLOCKS);
 
-    int state = 0;  // 0 para keywords e 1 para possiveis respostas
+    // maquina de estados: 0 para keywords e 1 para possiveis respostas
+    int state = 0;
+    // contador de blocos, especialmente util quando forem necessarios os ciclos for
     int block_counter = 0;
 
+    // criacao de um buffer temporário usado para armazenar a linha do ficheiro nas entradas bases de dados
     char buffer[MAX_CHARS];
 
     while (fgets(buffer, sizeof(buffer), fptr)) {
+        // buffer armazena 1 linha de cada vez
+
         // elimina enters
         buffer[strcspn(buffer, "\r\n")] = '\0';
 
@@ -92,10 +104,11 @@ void read_database(char* filename, char* greeting, char* repetition, char* farew
         if (strlen(buffer) == 0) continue;
 
         // converte para maiusculas
-        for (int i = 0; buffer[i]; i++) {
+        for (int i = 0; buffer[i] != '\0'; i++) {
             buffer[i] = toupper(buffer[i]);
         }
 
+        // maquina de estados e contador de blocos: '!' e '.' alternam o estado 0-1; '.' tambem conta blocos
         if (strcmp(buffer, "!") == 0) {
             state = 1;
             continue;
@@ -106,6 +119,12 @@ void read_database(char* filename, char* greeting, char* repetition, char* farew
             continue;
         }
 
+        /*  ARMAZENAR DADOS
+            1.º bloco: armazenar no vector greeting
+            2.º bloco: armazenar no vector repetition
+            3.º bloco: armazenar no vector farewell
+        */
+
         if (block_counter == 0 && state) {
             strcpy(greeting, buffer);
         } else if (block_counter == 1 && state) {
@@ -113,6 +132,7 @@ void read_database(char* filename, char* greeting, char* repetition, char* farew
         } else if (block_counter == 2 && state) {
             strcpy(farewell, buffer);
         } else if (block_counter >= 3) {
+            // pointer temporário que aponta para entradas especificas da base de dados
             BlockDB* current_db = &normal[block_counter - 3];
             if (!state) {  // armazenar keywords
                 strcpy(current_db->keywords[current_db->nr_keywords++], buffer);
@@ -122,12 +142,13 @@ void read_database(char* filename, char* greeting, char* repetition, char* farew
         }
     }
 
-    fclose(fptr);
+    /*nr de blocos da base de dados:
+    subtraimos 3 porque os 3 primeiros blocos
+    nao constam da base de dados*/
+    *nr_blocks = block_counter - 3;
 
-    if (block_counter > 3) {
-        NoKeyDB no_key.answers = normal[block_counter - 4];
-        *no_key = normal[block_counter - 4];
-    }
+    // fechar filepointer
+    fclose(fptr);
 }
 
 void format_input(char* line) {
@@ -146,24 +167,39 @@ void format_input(char* line) {
     *write = '\0';
 }
 
-void search_database(char* line, BlockDB normal[MAX_BLOCKS], BlockDB* no_key, int* nr_blocks) {
+void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks) {
     char* keyword_to_check;
-    int keyword_found;
-    for (int i = 0; i < (nr_blocks - 4); i++) {  // iterar  nos blocos
+    int keyword_found = 0;
+
+    int num_keyword_blocks = nr_blocks - 4;
+
+    for (int i = 0; i < num_keyword_blocks; i++) {  // iterar  nos blocos
         int k = normal[i].nr_keywords;
-        int a = normal[i].nr_answers;
+        // k para iterar ao longo das keywords de  cada bloco
 
         for (int j = 0; j < k; j++) {
             keyword_to_check = normal[i].keywords[j];
+            // checkar a keyword índice j
 
-            if (strstr(line, keyword_to_check) != NULL) {
-                printf("%s", normal[i].answers[normal[i].rr_counter]);
+            if (strstr(line, keyword_to_check) != NULL) {  // encontrar keyword na frase
+                printf("%s\n", normal[i].answers[normal[i].rr_counter]);
+
                 normal[i].rr_counter = (normal[i].rr_counter + 1) % normal[i].nr_answers;
+
                 keyword_found = 1;
+
+                return;
             }
         }
-        if (keyword_found) break;
     }
-    if (!keyword_found) {
+
+    if (!keyword_found) {  // nao encontrou keyword!
+        int nkf_pos = nr_blocks - 3;
+
+        printf("%s\n", normal[nkf_pos].answers[normal[nkf_pos].rr_counter]);
+
+        normal[nkf_pos].rr_counter = (normal[nkf_pos].rr_counter + 1) % normal[nkf_pos].nr_answers;
+
+        return;
     }
 }
