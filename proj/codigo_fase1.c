@@ -35,7 +35,7 @@ int main() {
     // chamar a função read_file, que regista a base de dados após ler o ficheiro
     read_file("eliza.dat", greeting, repetition, farewell, normal, &nr_blocks);
 
-    char former_line[MAX_CHARS];
+    char former_line[MAX_CHARS] = "";
     // registo da ultima entrada, util pra chamar o repetition
     char line[MAX_CHARS];
 
@@ -171,7 +171,7 @@ void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks) {
     char* keyword_to_check;
     int keyword_found = 0;
 
-    int num_keyword_blocks = nr_blocks - 4;
+    int num_keyword_blocks = nr_blocks - 1;
 
     for (int i = 0; i < num_keyword_blocks; i++) {  // iterar  nos blocos
         int k = normal[i].nr_keywords;
@@ -194,7 +194,7 @@ void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks) {
     }
 
     if (!keyword_found) {  // nao encontrou keyword!
-        int nkf_pos = nr_blocks - 3;
+        int nkf_pos = nr_blocks - 1;
 
         printf("%s\n", normal[nkf_pos].answers[normal[nkf_pos].rr_counter]);
 
