@@ -3,11 +3,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*  Definição de constantes macro:
+    > MAX_LINES:    número máximo de linhas de keywords ou respostas
+    > MAX_CHARS:    número máximo de caracteres por linha (do ficheiro ou de stdin)
+    > MAX_BLOCKS:   número máximo de blocos de keywords/respostas contidos no ficheiro */
+
 #define MAX_LINES 20
 #define MAX_CHARS 256
 #define MAX_BLOCKS 50
 
-// criação da estrutura BlockDB que age como base de dados
+/*  Criação de estrutura BlockDB a ser usada como base de dados.
+    Em cada bloco de keywords/respostas do ficheiro lido (depois dos blocos especiais de
+    saudação-repetição-despedida), armazena-se:
+    > keywords:     as keywords (numa matriz)
+    > nr_keywords:  o número de keywords (inteiro)
+    > answers:      as respostas (numa matriz)
+    > nr_answers:   o número de respostas (inteiro)
+    > rr_counter:   o contador de round-robin (inteiro) */
 
 typedef struct {
     char keywords[MAX_LINES][MAX_CHARS];
@@ -19,12 +31,14 @@ typedef struct {
     int rr_counter;
 } BlockDB;
 
-// declarações das funções usadas no programa (PROTOTYPES)
+// Declarações das funções usadas no programa (PROTOTYPES)
 
 void read_file(char* filename, char* greeting, char* repetition, char* farewell, BlockDB normal[MAX_BLOCKS], int* nr_blocos);
 void format_input(char* line);
 void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks);
 int find_in_line(char* line, char* keyword_to_check);
+
+//------------------------------------
 
 int main() {
     char greeting[MAX_CHARS];
@@ -33,7 +47,6 @@ int main() {
     BlockDB normal[MAX_BLOCKS];
     int nr_blocks = 0;
 
-    // chamar a função read_file, que regista a base de dados após ler o ficheiro
     read_file("eliza.dat", greeting, repetition, farewell, normal, &nr_blocks);
 
     char former_line[MAX_CHARS] = "";
@@ -86,18 +99,21 @@ int main() {
     return EXIT_SUCCESS;
 }
 
-void read_file(char* filename, char* greeting, char* repetition,
-               char* farewell, BlockDB normal[MAX_BLOCKS], int* nr_blocks) {
-    // abrir o file pointer
-    FILE* fptr = fopen(filename, "r");
+/*  Função read_file:
+    Esta função lê o ficheiro no formato especificado e preenche a base de dados, que
+    assume a forma de um vector de várias estruturas do tipo BlockDB */
 
+void read_file(char* filename, char* greeting, char* repetition, char* farewell, BlockDB normal[MAX_BLOCKS], int* nr_blocks) {
+
+    // Criar o file pointer e mostrar mensagem de erro caso não haja sucesso a abrir o ficheiro
+    FILE* fptr = fopen(filename, "r");
     if (fptr == NULL) {
         printf("Error, could not open file\n");
         exit(EXIT_FAILURE);
         ;
     }
 
-    // zerar a memória da base de dados
+    // Zerar a memória da base de dados para esta poder ser depois preenchida
     memset(normal, 0, sizeof(BlockDB) * MAX_BLOCKS);
 
     // maquina de estados: 0 para keywords e 1 para possiveis respostas
@@ -171,9 +187,6 @@ void format_input(char* line) {
     char* read = line;
     char* write = line;
 
-    // ignorar os espaços do inicio do input
-    while (*read != '\0' && isspace(*read)) read++;
-
     while (*read != '\0') {
         if (isalnum(*read) || isspace(*read)) {
             *write = toupper(*read);
@@ -182,12 +195,6 @@ void format_input(char* line) {
         read++;
     }
     *write = '\0';
-
-    // write > line pra prevenir procurar na posicao -1 se por exemplo input='   ' e todos os espaços ja tiverem sido suprimidos
-    while (write > line && isspace(*(write - 1))) {
-        write--;
-        *write = 0;
-    }
 }
 
 void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks) {
@@ -218,17 +225,14 @@ void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks) {
 }
 
 int find_in_line(char* line, char* keyword_to_check) {
-    /*esta funcao certifica-se de que a keyword corresponde efectivamente a uma palavra
-    da frase de input. Garantir que por exemplo "nothing" não desperta "HI".
-    Especificamos as boundaries esquerda (inicio de input ou espaço) e direita ('\0' ou espaço)*/
     char* pos_1st_letter = strstr(line, keyword_to_check);
 
     while (pos_1st_letter != NULL) {
         char* pos_last_letter = pos_1st_letter + strlen(keyword_to_check);
-        int clean_left = (pos_1st_letter == line) || (!isalnum(*(pos_1st_letter - 1)));
-        int clean_right = ((*pos_last_letter) == '\0') || (!isalnum(*(pos_last_letter)));
+        int clean_left = (pos_1st_letter == line) || (*(pos_1st_letter - 1) == ' ');
+        int clean_right = ((*pos_last_letter) == '\0') || (*(pos_last_letter) == ' ');
 
-        if (clean_left && clean_right) return 1;
+        return (clean_left && clean_right);
 
         pos_1st_letter = strstr(pos_1st_letter + 1, keyword_to_check);
     }
