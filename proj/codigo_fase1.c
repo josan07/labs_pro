@@ -24,6 +24,7 @@ typedef struct {
 void read_file(char* filename, char* greeting, char* repetition, char* farewell, BlockDB normal[MAX_BLOCKS], int* nr_blocos);
 void format_input(char* line);
 void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks);
+int find_in_line(char* line, char* keyword_to_check);
 
 int main() {
     char greeting[MAX_CHARS];
@@ -45,13 +46,24 @@ int main() {
     // ciclo que recebe como inputs stdin e os regista de cada vez como line, terminando implicitamente no EOF
     while (fgets(line, sizeof(line), stdin)) {
         // cortar a linha no enter
-        line[strcspn(line, "\n")] = '\0';
+        line[strcspn(line, "\r\n")] = '\0';
 
         // formatar a linha
         format_input(line);
 
         // ignorar se o user deu enter sem escrever nada
         if (strlen(line) == 0) continue;
+
+        // ignorar linhas apenas com espaços (input tipo '   ')
+        int spaces_only = 1;
+        for (int i = 0; line[i] != 0; i++) {
+            if (!isspace(line[i])) {
+                spaces_only = 0;
+                break;
+            }
+        }
+
+        if (spaces_only) continue;
 
         // mostrar mensagem de despedida se o user digitar especificamente 'BYE'
         if (strcmp("BYE", line) == 0) {
@@ -71,6 +83,7 @@ int main() {
         // invocar função search_database para dar print à resposta (Stdout)
         search_database(line, normal, nr_blocks);
     }
+    return EXIT_SUCCESS;
 }
 
 void read_file(char* filename, char* greeting, char* repetition,
@@ -80,7 +93,8 @@ void read_file(char* filename, char* greeting, char* repetition,
 
     if (fptr == NULL) {
         printf("Error, could not open file\n");
-        return;
+        exit(EXIT_FAILURE);
+        ;
     }
 
     // zerar a memória da base de dados
@@ -157,6 +171,9 @@ void format_input(char* line) {
     char* read = line;
     char* write = line;
 
+    // ignorar os espaços do inicio do input
+    while (*read != '\0' && isspace(*read)) read++;
+
     while (*read != '\0') {
         if (isalnum(*read) || isspace(*read)) {
             *write = toupper(*read);
@@ -165,41 +182,56 @@ void format_input(char* line) {
         read++;
     }
     *write = '\0';
+
+    // write > line pra prevenir procurar na posicao -1 se por exemplo input='   ' e todos os espaços ja tiverem sido suprimidos
+    while (write > line && isspace(*(write - 1))) {
+        write--;
+        *write = 0;
+    }
 }
 
 void search_database(char* line, BlockDB normal[MAX_BLOCKS], int nr_blocks) {
     char* keyword_to_check;
     int keyword_found = 0;
-
     int num_keyword_blocks = nr_blocks - 1;
-
     for (int i = 0; i < num_keyword_blocks; i++) {  // iterar  nos blocos
         int k = normal[i].nr_keywords;
-        // k para iterar ao longo das keywords de  cada bloco
 
+        // k para iterar ao longo das keywords de  cada bloco
         for (int j = 0; j < k; j++) {
             keyword_to_check = normal[i].keywords[j];
             // checkar a keyword índice j
-
-            if (strstr(line, keyword_to_check) != NULL) {  // encontrar keyword na frase
+            if ((strstr(line, keyword_to_check) != NULL) && find_in_line(line, keyword_to_check)) {  // encontrar keyword na frase
                 printf("%s\n", normal[i].answers[normal[i].rr_counter]);
-
                 normal[i].rr_counter = (normal[i].rr_counter + 1) % normal[i].nr_answers;
-
                 keyword_found = 1;
-
                 return;
             }
         }
     }
-
     if (!keyword_found) {  // nao encontrou keyword!
         int nkf_pos = nr_blocks - 1;
-
         printf("%s\n", normal[nkf_pos].answers[normal[nkf_pos].rr_counter]);
-
         normal[nkf_pos].rr_counter = (normal[nkf_pos].rr_counter + 1) % normal[nkf_pos].nr_answers;
-
         return;
     }
+}
+
+int find_in_line(char* line, char* keyword_to_check) {
+    /*esta funcao certifica-se de que a keyword corresponde efectivamente a uma palavra
+    da frase de input. Garantir que por exemplo "nothing" não desperta "HI".
+    Especificamos as boundaries esquerda (inicio de input ou espaço) e direita ('\0' ou espaço)*/
+    char* pos_1st_letter = strstr(line, keyword_to_check);
+
+    while (pos_1st_letter != NULL) {
+        char* pos_last_letter = pos_1st_letter + strlen(keyword_to_check);
+        int clean_left = (pos_1st_letter == line) || (!isalnum(*(pos_1st_letter - 1)));
+        int clean_right = ((*pos_last_letter) == '\0') || (!isalnum(*(pos_last_letter)));
+
+        if (clean_left && clean_right) return 1;
+
+        pos_1st_letter = strstr(pos_1st_letter + 1, keyword_to_check);
+    }
+
+    return 0;
 }
